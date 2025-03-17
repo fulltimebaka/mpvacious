@@ -429,28 +429,34 @@ local function update_notes(note_ids, overwrite)
     local multiple_cards = n_cards > 1;
 
     for i = 1, n_cards do
-        local new_data = construct_note_fields(sub['text'], sub['secondary'], snapshot.filename, audio.filename)
-        local stored_data = ankiconnect.get_note_fields(note_ids[i])
-        if stored_data then
-            forvo.set_output_dir(anki_media_dir)
-            new_data = forvo.append(new_data, stored_data)
-            new_data = update_sentence(new_data, stored_data)
-            if not overwrite then
-                if config.append_media then
-                    new_data = join_media_fields(new_data, stored_data)
-                else
-                    new_data = join_media_fields(stored_data, new_data)
+        local stored_data, error = ankiconnect.get_note_fields(note_ids[i])
+
+        if error then
+            h.notify(string.format("Failed to get fields for note id: %s\nError: %s", note_ids[i], error), "warn", 3)
+        else
+            local new_data = construct_note_fields(sub['text'], sub['secondary'], snapshot.filename, audio.filename)
+
+            if stored_data then
+                forvo.set_output_dir(anki_media_dir)
+                new_data = forvo.append(new_data, stored_data)
+                new_data = update_sentence(new_data, stored_data)
+                if not overwrite then
+                    if config.append_media then
+                        new_data = join_media_fields(new_data, stored_data)
+                    else
+                        new_data = join_media_fields(stored_data, new_data)
+                    end
                 end
             end
-        end
 
-        -- If the text is still empty, put some dummy text to let the user know why
-        -- there's no text in the sentence field.
-        if h.is_empty(new_data[config.sentence_field]) then
-            new_data[config.sentence_field] = string.format("mpvacious wasn't able to grab subtitles (%s)", os.time())
-        end
+            -- If the text is still empty, put some dummy text to let the user know why
+            -- there's no text in the sentence field.
+            if h.is_empty(new_data[config.sentence_field]) then
+                new_data[config.sentence_field] = string.format("mpvacious wasn't able to grab subtitles (%s)", os.time())
+            end
 
-        ankiconnect.append_media(note_ids[i], new_data, create_media, substitute_fmt(config.note_tag), multiple_cards)
+            ankiconnect.append_media(note_ids[i], new_data, create_media, substitute_fmt(config.note_tag), multiple_cards)
+        end
     end
 
     if multiple_cards then

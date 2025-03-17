@@ -142,6 +142,7 @@ self.get_selected_note_ids = function()
 end
 
 self.get_note_fields = function(note_id)
+    -- I noticed that it doesn't error on invalid note, instead returns "result": [{}]
     local ret = self.execute {
         action = "notesInfo",
         version = 6,
@@ -152,15 +153,30 @@ self.get_note_fields = function(note_id)
 
     local result, error = self.parse_result(ret)
 
-    if error == nil then
-        result = result[1].fields
+    if error then
+        return nil, error
+    end
+
+    -- this I guess will never happen
+    if h.is_empty(result) then
+        return nil, "Empty table from notesInfo"
+    end
+
+    -- this will happen on bad note id
+    if h.is_empty(result[1]) then
+        return nil, "Empty result from notesInfo. Is the note id correct?"
+    end
+
+    -- I guess shouldn't error on result[1].fields == nil
+    -- but haven't seen it being empty when everything else is fine
+    result = result[1].fields
+    if result then
         for key, value in pairs(result) do
             result[key] = value.value
         end
-        return result
-    else
-        return nil
     end
+
+    return result
 end
 
 self.gui_browse = function(query)
@@ -207,14 +223,14 @@ self.append_media = function(note_id, fields, create_media_fn, tag, quiet_on_suc
 
     local on_finish = function(_, result, _)
         local _, error = self.parse_result(result)
-        if not error then
-            create_media_fn()
-            self.add_tag(note_id, tag)
+    if not error then
+        create_media_fn()
+        self.add_tag(note_id, tag)
             if not quiet_on_success then
                 self.gui_browse(string.format("nid:%s", note_id)) -- select the updated note in the card browser
                 h.notify(string.format("Note #%s updated.", note_id))
             end
-        else
+    else
             h.notify(string.format("Error: %s.", error), "error", 2)
         end
     end
