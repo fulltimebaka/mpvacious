@@ -204,7 +204,7 @@ self.add_tag = function(note_id, tag)
     end
 end
 
-self.append_media = function(note_id, fields, create_media_fn, tag, quiet_on_success)
+self.append_media = function(note_id, fields, create_media_fn, tag)
     -- AnkiConnect will fail to update the note if it's selected in the Anki Browser.
     -- https://github.com/FooSoft/anki-connect/issues/82
     -- Switch focus from the current note to avoid it.
@@ -221,21 +221,22 @@ self.append_media = function(note_id, fields, create_media_fn, tag, quiet_on_suc
         }
     }
 
-    local on_finish = function(_, result, _)
-        local _, error = self.parse_result(result)
-    if not error then
-        create_media_fn()
-        self.add_tag(note_id, tag)
-            if not quiet_on_success then
-                self.gui_browse(string.format("nid:%s", note_id)) -- select the updated note in the card browser
-                h.notify(string.format("Note #%s updated.", note_id))
-            end
-    else
-            h.notify(string.format("Error: %s.", error), "error", 2)
-        end
+    local result, error = self.execute(args, nil)
+
+    if error then
+        return error
     end
 
-    self.execute(args, on_finish)
+    _, error = self.parse_result(result)
+
+    if error then
+        return error
+    end
+
+    create_media_fn()
+    self.add_tag(note_id, tag)
+
+    return nil
 end
 
 self.init = function(config, platform)

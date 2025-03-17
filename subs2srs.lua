@@ -426,13 +426,15 @@ local function update_notes(note_ids, overwrite)
     end
 
     local n_cards = #note_ids
-    local multiple_cards = n_cards > 1;
+    local good_cards = {}
+    local bad_cards = {}
 
     for i = 1, n_cards do
         local stored_data, error = ankiconnect.get_note_fields(note_ids[i])
 
         if error then
-            h.notify(string.format("Failed to get fields for note id: %s\nError: %s", note_ids[i], error), "warn", 3)
+            h.notify(string.format("Failed to get fields for note id: %s\nError: %s", note_ids[i], error), "error", 3)
+            table.insert(bad_cards, {note_ids[i], error})
         else
             local new_data = construct_note_fields(sub['text'], sub['secondary'], snapshot.filename, audio.filename)
 
@@ -455,22 +457,42 @@ local function update_notes(note_ids, overwrite)
                 new_data[config.sentence_field] = string.format("mpvacious wasn't able to grab subtitles (%s)", os.time())
             end
 
-            ankiconnect.append_media(note_ids[i], new_data, create_media, substitute_fmt(config.note_tag), multiple_cards)
+            error = ankiconnect.append_media(note_ids[i], new_data, create_media, substitute_fmt(config.note_tag))
+
+            if error then
+                h.notify(string.format("Failed to update note id: %s\nError: %s", note_ids[i], error), "error", 3)
+                table.insert(bad_cards, {note_ids[i], error})
+            else
+                table.insert(good_cards, note_ids[i])
+            end
+
         end
     end
 
-    if multiple_cards then
-        -- Opens all the cards in gui browser
+    local message;
+    local n_good_cards = #good_cards
+    local n_bad_cards = #bad_cards
+
+    if n_bad_cards > 0 then
+        message = n_good_cards == 0 and "Failed to update any notes." or string.format("Failed to update %i note(s).", n_bad_cards)
+        for i = 1, n_bad_cards do
+            local bad_note_id, error = table.unpack(bad_cards[i])
+            message = message .. string.format("\n%s: %s", bad_note_id, error)
+        end
+    end
+
+    if n_good_cards > 0 then
         if not config.disable_gui_browser then
-            local gui_query = string.format("nid:%s", note_ids[1])
-            for i = 2, n_cards do
-                gui_query = gui_query .. " OR nid:" .. note_ids[i]
+            local gui_query = string.format("nid:%s", good_cards[1])
+            for i = 2, n_good_cards do
+                gui_query = gui_query .. " OR nid:" .. good_cards[i]
             end
             ankiconnect.gui_browse(gui_query)
         end
-
-        h.notify(string.format("Updated %i notes.", n_cards))
+        message = (message and message .. "\n" or "") .. string.format("Updated %i note(s) successfully.", n_good_cards)
     end
+
+    h.notify(message, "info", 3)
 
     subs_observer.clear()
     quick_creation_opts:clear_options()
