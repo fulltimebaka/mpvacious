@@ -427,14 +427,14 @@ local function update_notes(note_ids, overwrite)
 
     local n_cards = #note_ids
     local good_cards = {}
-    local bad_cards = {}
+    local n_bad_cards = 0
 
     for i = 1, n_cards do
         local stored_data, error = ankiconnect.get_note_fields(note_ids[i])
 
         if error then
-            h.notify(string.format("Failed to get fields for note id: %s\nError: %s", note_ids[i], error), "error", 3)
-            table.insert(bad_cards, {note_ids[i], error})
+            mp.msg.error(string.format("Failed to get fields for note id: %s\nError: %s", note_ids[i], error))
+            n_bad_cards = n_bad_cards + 1
         else
             local new_data = construct_note_fields(sub['text'], sub['secondary'], snapshot.filename, audio.filename)
 
@@ -460,25 +460,22 @@ local function update_notes(note_ids, overwrite)
             error = ankiconnect.append_media(note_ids[i], new_data, create_media, substitute_fmt(config.note_tag))
 
             if error then
-                h.notify(string.format("Failed to update note id: %s\nError: %s", note_ids[i], error), "error", 3)
-                table.insert(bad_cards, {note_ids[i], error})
+                mp.msg.error(string.format("Failed to update note id: %s\nError: %s", note_ids[i], error))
+                n_bad_cards = n_bad_cards + 1
             else
                 table.insert(good_cards, note_ids[i])
             end
-
         end
     end
 
-    local message;
+    local message = nil
     local n_good_cards = #good_cards
-    local n_bad_cards = #bad_cards
 
     if n_bad_cards > 0 then
-        message = n_good_cards == 0 and "Failed to update any notes." or string.format("Failed to update %i note(s).", n_bad_cards)
-        for i = 1, n_bad_cards do
-            local bad_note_id, error = table.unpack(bad_cards[i])
-            message = message .. string.format("\n%s: %s", bad_note_id, error)
-        end
+        message = n_good_cards == 0 and
+            "Failed to update any notes."
+            or
+            string.format("Failed to update %i note(s).\n", n_bad_cards)
     end
 
     if n_good_cards > 0 then
@@ -489,7 +486,7 @@ local function update_notes(note_ids, overwrite)
             end
             ankiconnect.gui_browse(gui_query)
         end
-        message = (message and message .. "\n" or "") .. string.format("Updated %i note(s) successfully.", n_good_cards)
+        message = string.format("%sUpdated %i note(s) successfully.", message and message or "", n_good_cards)
     end
 
     h.notify(message, "info", 3)
